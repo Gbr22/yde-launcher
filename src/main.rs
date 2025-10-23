@@ -1,9 +1,17 @@
+use std::thread;
+
 use iced::{Element, Task};
+
+use crate::{data::APP_DATA, entry::Entry};
+
+mod data;
+mod entry;
 
 #[derive(Debug, Clone)]
 enum Message {
     Event(iced::Event),
     SetQuery(String),
+    PressEntry(String)
 }
 
 struct State {
@@ -23,6 +31,9 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
         Message::SetQuery(s) => state.query = s,
         Message::Event(iced::Event::Window(iced::window::Event::CloseRequested)) => {
             return iced::exit();
+        },
+        Message::PressEntry(id) =>{
+            println!("Pressed entry with id: {}", id);
         },
         Message::Event(e) => {
             match e {
@@ -55,6 +66,40 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
 }
 
 fn view(state: &State) -> Element<Message> {
+    let lock = APP_DATA.read().unwrap();
+    
+    let elements: Vec<Element<Message>> = lock.entries.iter().map(|entry|{
+        let mut content = iced::widget::Column::new();
+        content = content.push(
+            iced::widget::text(entry.title().to_string())
+                .size(15)
+        );
+        if let Some(descrption) = entry.description() {
+            content = content.push(
+                iced::widget::text(descrption.to_string())
+                    .style(|theme: &iced::Theme|{
+                        let mut s = iced::widget::text::Style::default();
+                        s.color = Some(theme.palette().text.scale_alpha(0.6));
+                        s
+                    })
+                    .size(13)
+            );
+        }
+
+        iced::widget::button(
+            content
+        )
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fixed(48.0))
+        .style(|theme: &iced::Theme, status| {
+            let mut s = iced::widget::button::Style::default();
+            s.text_color = theme.palette().text;
+            s
+        })
+        .on_press(Message::PressEntry(entry.id().to_string()))
+        .into()
+    }).collect();
+
     iced::widget::column![
         iced::widget::text_input("Search", &state.query)
             .on_input(|s| Message::SetQuery(s))
@@ -65,10 +110,17 @@ fn view(state: &State) -> Element<Message> {
                 s.border.width = 0.0;
                 s
             })
+            .padding(10),
+        iced::widget::scrollable(iced::widget::column(elements))
+            .width(iced::Length::Fill)
     ].into()
 }
 
 pub fn main() -> iced::Result {
+    thread::spawn(||{
+        data::load_app_data();
+    });
+
     iced::application(||{
         State::default()
     }, update, view)
