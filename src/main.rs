@@ -1,4 +1,4 @@
-use std::thread;
+use std::{path::PathBuf, thread};
 
 use iced::{Element, Task};
 
@@ -33,7 +33,11 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
             return iced::exit();
         },
         Message::PressEntry(id) =>{
-            println!("Pressed entry with id: {}", id);
+            let lock = APP_DATA.read().unwrap();
+            let entry = lock.entries.iter().find(|e| e.id() == id);
+            if let Some(entry) = entry {
+                println!("Entry: {:?}", entry);
+            }
         },
         Message::Event(e) => {
             match e {
@@ -67,6 +71,9 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
 
 fn view(state: &State) -> Element<Message> {
     let lock = APP_DATA.read().unwrap();
+
+    let a = Some(Some(PathBuf::from("a")));
+    let b = a.flatten();
     
     let elements: Vec<Element<Message>> = lock.entries.iter().map(|entry|{
         let mut content = iced::widget::Column::new();
@@ -86,8 +93,24 @@ fn view(state: &State) -> Element<Message> {
             );
         }
 
+        let image_elem: iced::Element<Message> = if let Some(icon_path) = entry.icon_path() {
+            iced::widget::Image::new(icon_path.clone())
+                .width(iced::Length::Fixed(40.0))
+                .height(iced::Length::Fixed(40.0))
+                .into()
+        } else {
+            iced::widget::space()
+                .width(iced::Length::Fixed(40.0))
+                .height(iced::Length::Fixed(40.0))
+                .into()
+        };
+
         iced::widget::button(
-            content
+            iced::widget::row![
+                image_elem,
+                iced::widget::space().width(iced::Length::Fixed(10.0)),
+                content
+            ]
         )
         .width(iced::Length::Fill)
         .height(iced::Length::Fixed(48.0))

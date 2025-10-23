@@ -6,14 +6,14 @@ use rayon::iter::ParallelIterator;
 
 use crate::entry::Entry;
 
-pub fn get_application_dirs() -> Vec<PathBuf> {
+pub fn get_data_dirs() -> Vec<PathBuf> {
     let dirs_string = std::env::var("XDG_DATA_DIRS").unwrap_or_default();
     
     dirs_string.split(':').map(PathBuf::from).collect()
 }
 
 pub fn get_desktop_entry_paths() -> Vec<PathBuf> {
-    let dirs = get_application_dirs();
+    let dirs = get_data_dirs();
 
     let desktop_entries: Vec<PathBuf> = dirs.par_iter().map(|dir|{
         let apps_dir = dir.join("applications");
@@ -62,6 +62,7 @@ pub fn get_desktop_entries() -> Vec<DesktopEntry> {
 #[derive(Debug, Clone)]
 pub struct DesktopEntry {
     path: PathBuf,
+    icon: Option<PathBuf>,
     entry: freedesktop_entry_parser::Entry,
 }
 
@@ -83,11 +84,48 @@ impl Entry for DesktopEntry {
             .flatten()
             .map(|e|e.as_str())
     }
+    
+    fn icon_path(&self) -> Option<&PathBuf> {
+        self.icon.as_ref()
+    }
 }
 
 pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error> {
     let entry = freedesktop_entry_parser::parse_entry(path)?;
-    Ok(DesktopEntry { entry, path: path.clone() })
+    let icon_value = entry.get("Desktop Entry", "Icon")
+        .map(|e| e.first())
+        .flatten()
+        .map(|e| e.as_str());
+
+    let icon_path: Option<PathBuf> = icon_value.map(|icon_value| {
+        let icon_path = PathBuf::from(icon_value);
+
+        if icon_path.is_absolute() {
+            Some(icon_path)
+        } else {
+            let data_dirs = get_data_dirs();
+            for dir in data_dirs {
+                let resolutions = vec![
+                    "256x256",
+                    "128x128",
+                    "64x64",
+                    "48x48",
+                    "32x32",
+                    "24x24",
+                    "16x16",
+                ];
+                for resolution in resolutions {
+                    let possible_path = dir.join(format!("icons/hicolor/{}/apps/{}.png", resolution, icon_value));
+                    if possible_path.exists() {
+                        return Some(possible_path);
+                    }
+                }
+            }
+            None
+        }
+    }).flatten();
+
+    Ok(DesktopEntry { entry, path: path.clone(), icon: icon_path })
 }
 
 #[derive(Debug)]
