@@ -1,9 +1,7 @@
-use std::{path::PathBuf, thread};
-
 use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use iced::{Element, Task};
-
-use crate::{data::APP_DATA, entry::Entry};
+use crate::entry::Entry;
+use crate::data::DesktopEntry;
 
 mod data;
 mod entry;
@@ -12,19 +10,55 @@ mod entry;
 enum Message {
     Event(iced::Event),
     SetQuery(String),
-    PressEntry(String)
+    PressEntry(String),
+    LoadEntries(Vec<DesktopEntry>),
 }
 
 struct State {
     query: String,
     selection_index: usize,
+    entries: Vec<DesktopEntry>,
+    filtered_entries: Vec<DesktopEntry>,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             selection_index: 0,
-            query: String::new()
+            query: String::new(),
+            entries: Vec::new(),
+            filtered_entries: Vec::new(),
+        }
+    }
+}
+
+impl State {
+    fn update_filtered_entries(&mut self) {
+        let matcher = SkimMatcherV2::default();
+        let mut vec = self.entries.iter().flat_map(|entry| {
+            if self.query.is_empty() {
+                Some((0, entry))
+            } else {
+                matcher.fuzzy_match(entry.title(), &self.query).map(|score|{
+                    (score, entry)
+                })
+            }
+        }).collect::<Vec<_>>();
+        vec.sort_by(|a,b|a.1.title().cmp(b.1.title()));
+        vec.sort_by(|a, b| b.0.cmp(&a.0));
+        self.filtered_entries = vec.iter().map(|(_, entry)| (*entry).clone()).collect();
+    }
+}
+
+impl State {
+    fn selection_move(&mut self, direction: isize) {
+        if direction < 0 {
+            self.selection_index = self.selection_index.saturating_sub(1);
+        } else if direction > 0 {
+            self.selection_index = self.selection_index.saturating_add(1);
+            if self.selection_index >= self.filtered_entries.len() {
+                self.selection_index = self.filtered_entries.len().saturating_sub(1);
+            }
         }
     }
 }
@@ -34,16 +68,21 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
         Message::SetQuery(s) => {
             state.query = s;
             state.selection_index = 0;
+            state.update_filtered_entries();
         },
         Message::Event(iced::Event::Window(iced::window::Event::CloseRequested)) => {
             return iced::exit();
         },
         Message::PressEntry(id) =>{
-            let lock = APP_DATA.read().unwrap();
-            let entry = lock.entries.iter().find(|e| e.id() == id);
+            let entry = state.entries.iter().find(|e| e.id() == id);
             if let Some(entry) = entry {
                 println!("Entry: {:?}", entry);
             }
+        },
+        Message::LoadEntries(entries) => {
+            state.entries = entries;
+            state.selection_index = 0;
+            state.update_filtered_entries();
         },
         Message::Event(e) => {
             match e {
@@ -61,10 +100,16 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
                         return iced::exit();
                     }
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowUp) {
-                        state.selection_index = state.selection_index.saturating_sub(1);
+                        state.selection_move(-1);
                     }
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowDown) {
-                        state.selection_index = state.selection_index.saturating_add(1);
+                        state.selection_move(1);
+                    }
+                    if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::PageUp) {
+                        state.selection_index = 0;
+                    }
+                    if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::PageDown) {
+                        state.selection_index = state.filtered_entries.len().saturating_sub(1);
                     }
                 },
                 iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => {
@@ -81,20 +126,9 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
     Task::none()
 }
 
-fn view(state: &State) -> Element<Message> {
-    let lock = APP_DATA.read().unwrap();
-    
-    let elements: Vec<Element<Message>> = lock.entries.iter().enumerate().flat_map(|(i, entry)|{
+fn view(state: &State) -> Element<'_, Message> {
+    let elements: Vec<Element<Message>> = state.filtered_entries.iter().enumerate().flat_map(|(i, entry)|{
         let is_selected = i == state.selection_index;
-        let does_match = if state.query.is_empty() {
-            true
-        } else {
-            let matcher = SkimMatcherV2::default();
-            matcher.fuzzy_match(entry.title(), &state.query).is_some()
-        };
-        if !does_match {
-            return None;
-        }
         let mut content = iced::widget::Column::new();
         content = content.push(
             iced::widget::text(entry.title().to_string())
@@ -133,7 +167,7 @@ fn view(state: &State) -> Element<Message> {
         )
         .width(iced::Length::Fill)
         .height(iced::Length::Fixed(48.0))
-        .style(move |theme: &iced::Theme, status| {
+    .style(move |theme: &iced::Theme, _status| {
             let mut s = iced::widget::button::Style::default();
             s.text_color = theme.palette().text;
 
@@ -152,8 +186,8 @@ fn view(state: &State) -> Element<Message> {
         iced::widget::text_input("Search", &state.query)
             .on_input(|s| Message::SetQuery(s))
             .id("search_input")
-            .style(|theme, status| {
-                let mut s = iced::widget::text_input::default(&theme, status);
+            .style(|theme, _status| {
+                let mut s = iced::widget::text_input::default(&theme, _status);
                 s.border.color = iced::Color::from_rgba(0.0, 0.0, 0.0, 0.0);
                 s.border.width = 0.0;
                 s
@@ -165,21 +199,20 @@ fn view(state: &State) -> Element<Message> {
 }
 
 pub fn main() -> iced::Result {
-    thread::spawn(||{
-        data::load_app_data();
-    });
-
-    iced::application(||{
-        State::default()
+    iced::application(|| {
+        (
+            State::default(),
+            Task::perform(async move {
+                data::get_desktop_entries()
+            }, |entries| Message::LoadEntries(entries)),
+        )
     }, update, view)
+        .transparent(true)
+        .antialiasing(true)
+        .centered()
+        .window_size((500.0, 400.0))
+        .level(iced::window::Level::AlwaysOnTop)
+        .decorations(false)
         .subscription(|_state| iced::event::listen().map(Message::Event))
-        .window(iced::window::Settings {
-            decorations: false,
-            transparent: true,
-            resizable: false,
-            size: iced::Size { width: 500.0, height: 400.0 },
-            level: iced::window::Level::AlwaysOnTop,
-            ..Default::default()
-        })
         .run()
 }
