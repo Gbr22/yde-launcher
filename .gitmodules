@@ -1,3 +1,0 @@
-[submodule "crates/iced"]
-	path = crates/iced
-	url = https://github.com/iced-rs/iced
