@@ -40,14 +40,13 @@ pub fn get_desktop_entries() -> Vec<DesktopEntry> {
     let entries: Vec<DesktopEntry> = paths.par_iter().filter_map(|path|{
         match parse_desktop_entry(path) {
             Ok(entry) => {
-                let app_type = entry.entry.get("Desktop Entry", "Type")
-                    .map(|e| e.first())
-                    .flatten()
-                    .map(|e| e.as_str());
+                let no_display = entry.entry.get("Desktop Entry", "NoDisplay")
+                    .map(|e| e.iter().filter(|t| t.as_str() == "true").collect::<Vec<_>>().len() > 0).unwrap_or(false);
 
-                if app_type != Some("Application") {
+                if no_display {
                     return None;
                 }
+
                 Some(entry)
             },
             Err(_) => {
@@ -126,23 +125,4 @@ pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error
     }).flatten();
 
     Ok(DesktopEntry { entry, path: path.clone(), icon: icon_path })
-}
-
-#[derive(Debug)]
-pub struct AppData {
-    pub entries: Vec<DesktopEntry>,
-}
-
-pub static APP_DATA: Lazy<RwLock<AppData>> = Lazy::new(|| RwLock::new(AppData {
-    entries: Vec::new(),
-}));
-
-pub fn load_app_data() {
-    let entries = get_desktop_entries();
-    match APP_DATA.write() {
-        Ok(mut lock) => {
-            lock.entries = entries;
-        }
-        Err(_) => {}
-    }
 }
