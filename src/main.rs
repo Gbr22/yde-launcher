@@ -1,5 +1,6 @@
 use std::{path::PathBuf, thread};
 
+use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use iced::{Element, Task};
 
 use crate::{data::APP_DATA, entry::Entry};
@@ -16,11 +17,13 @@ enum Message {
 
 struct State {
     query: String,
+    selection_index: usize,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
+            selection_index: 0,
             query: String::new()
         }
     }
@@ -28,7 +31,10 @@ impl Default for State {
 
 fn update(state: &mut State, message: Message) -> iced::Task<Message> {
     match message {
-        Message::SetQuery(s) => state.query = s,
+        Message::SetQuery(s) => {
+            state.query = s;
+            state.selection_index = 0;
+        },
         Message::Event(iced::Event::Window(iced::window::Event::CloseRequested)) => {
             return iced::exit();
         },
@@ -54,6 +60,12 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) {
                         return iced::exit();
                     }
+                    if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowUp) {
+                        state.selection_index = state.selection_index.saturating_sub(1);
+                    }
+                    if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowDown) {
+                        state.selection_index = state.selection_index.saturating_add(1);
+                    }
                 },
                 iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => {
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) {
@@ -71,11 +83,18 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
 
 fn view(state: &State) -> Element<Message> {
     let lock = APP_DATA.read().unwrap();
-
-    let a = Some(Some(PathBuf::from("a")));
-    let b = a.flatten();
     
-    let elements: Vec<Element<Message>> = lock.entries.iter().map(|entry|{
+    let elements: Vec<Element<Message>> = lock.entries.iter().enumerate().flat_map(|(i, entry)|{
+        let is_selected = i == state.selection_index;
+        let does_match = if state.query.is_empty() {
+            true
+        } else {
+            let matcher = SkimMatcherV2::default();
+            matcher.fuzzy_match(entry.title(), &state.query).is_some()
+        };
+        if !does_match {
+            return None;
+        }
         let mut content = iced::widget::Column::new();
         content = content.push(
             iced::widget::text(entry.title().to_string())
@@ -105,7 +124,7 @@ fn view(state: &State) -> Element<Message> {
                 .into()
         };
 
-        iced::widget::button(
+        Some(iced::widget::button(
             iced::widget::row![
                 image_elem,
                 iced::widget::space().width(iced::Length::Fixed(10.0)),
@@ -114,13 +133,19 @@ fn view(state: &State) -> Element<Message> {
         )
         .width(iced::Length::Fill)
         .height(iced::Length::Fixed(48.0))
-        .style(|theme: &iced::Theme, status| {
+        .style(move |theme: &iced::Theme, status| {
             let mut s = iced::widget::button::Style::default();
             s.text_color = theme.palette().text;
+
+            if is_selected {
+                s.text_color = theme.palette().primary;
+                s.background = Some(iced::Background::Color(theme.palette().primary.scale_alpha(0.1)));
+            }
+
             s
         })
         .on_press(Message::PressEntry(entry.id().to_string()))
-        .into()
+        .into())
     }).collect();
 
     iced::widget::column![
