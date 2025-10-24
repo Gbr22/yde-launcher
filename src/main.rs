@@ -12,13 +12,18 @@ enum Message {
     SetQuery(String),
     PressEntry(String),
     LoadEntries(Vec<DesktopEntry>),
+    ScrollEntries(iced_widget::scrollable::Viewport),
 }
+
+const ENTRIES_SCROLL_CONTAINER_ID: &str = "entries_scroll_container";
+const SEARCH_INPUT_ID: &str = "search_input";
 
 struct State {
     query: String,
     selection_index: usize,
     entries: Vec<DesktopEntry>,
     filtered_entries: Vec<DesktopEntry>,
+    entries_scroll_viewport: Option<iced_widget::scrollable::Viewport>,
 }
 
 impl Default for State {
@@ -28,9 +33,12 @@ impl Default for State {
             query: String::new(),
             entries: Vec::new(),
             filtered_entries: Vec::new(),
+            entries_scroll_viewport: None,
         }
     }
 }
+
+const ENTRY_HEIGHT: f32 = 48.0;
 
 impl State {
     fn update_filtered_entries(&mut self) {
@@ -51,24 +59,80 @@ impl State {
 }
 
 impl State {
-    fn selection_move(&mut self, direction: isize) {
-        if direction < 0 {
-            self.selection_index = self.selection_index.saturating_sub(1);
-        } else if direction > 0 {
-            self.selection_index = self.selection_index.saturating_add(1);
-            if self.selection_index >= self.filtered_entries.len() {
-                self.selection_index = self.filtered_entries.len().saturating_sub(1);
+    fn selection_set(&mut self, index: usize) -> Task<Message> {
+        self.selection_index = index;
+        if self.selection_index >= self.filtered_entries.len() {
+            self.selection_index = self.filtered_entries.len().saturating_sub(1);
+        }
+        let len = self.filtered_entries.len();
+
+        let rel_y = if let Some(viewport) = &self.entries_scroll_viewport {
+            let entry_height = ENTRY_HEIGHT;
+            let entry_top = self.selection_index as f32 * entry_height;
+            let entry_bottom = entry_top + entry_height;
+
+            let viewport_top = viewport.absolute_offset().y;
+            let viewport_height = viewport.bounds().height;
+            let viewport_bottom = viewport_top + viewport_height;
+            let is_fully_within_viewport = entry_top >= viewport_top && entry_bottom <= viewport_bottom;
+
+            if is_fully_within_viewport {
+                None
+            } else {
+                let total_height = (len as f32) * entry_height;
+                let max_scroll = (total_height - viewport_height).max(0.0);
+
+                let mut desired_offset_y = viewport_top;
+                if entry_top < viewport_top {
+                    desired_offset_y = entry_top;
+                } else if entry_bottom > (viewport_top + viewport_height) {
+                    desired_offset_y = entry_bottom - viewport_height;
+                }
+
+                let desired_offset_y = desired_offset_y.clamp(0.0, max_scroll);
+                let rel_y = if max_scroll > 0.0 { desired_offset_y / max_scroll } else { 0.0 };
+
+                Some(rel_y)
             }
+        } else if len > 1 {
+            Some(self.selection_index as f32 / (len.saturating_sub(1) as f32))
+        } else {
+            Some(0.0)
+        };
+
+        if let Some(rel_y) = rel_y {
+            iced::widget::operation::snap_to(
+                ENTRIES_SCROLL_CONTAINER_ID,
+                iced::widget::scrollable::RelativeOffset { x: 0.0, y: rel_y },
+            )
+        } else {
+            Task::none()
+        }
+    }
+    fn selection_move(&mut self, direction: isize) -> Task<Message> {
+        if direction < 0 {
+            return self.selection_set(self.selection_index.saturating_sub(direction.abs() as usize));
+        } else {
+            return self.selection_set(self.selection_index.saturating_add(direction as usize));
         }
     }
 }
 
+
+
 fn update(state: &mut State, message: Message) -> iced::Task<Message> {
     match message {
+        Message::ScrollEntries(viewport) => {
+            state.entries_scroll_viewport = Some(viewport);
+        },
         Message::SetQuery(s) => {
             state.query = s;
             state.selection_index = 0;
             state.update_filtered_entries();
+            return iced::widget::operation::snap_to(
+                ENTRIES_SCROLL_CONTAINER_ID,
+                iced::widget::scrollable::RelativeOffset::START,
+            );
         },
         Message::Event(iced::Event::Window(iced::window::Event::CloseRequested)) => {
             return iced::exit();
@@ -83,6 +147,10 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
             state.entries = entries;
             state.selection_index = 0;
             state.update_filtered_entries();
+            return iced::widget::operation::snap_to(
+                ENTRIES_SCROLL_CONTAINER_ID,
+                iced::widget::scrollable::RelativeOffset::START,
+            );
         },
         Message::Event(e) => {
             match e {
@@ -90,26 +158,26 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
                     return iced::exit();
                 },
                 iced_core::event::Event::Window(iced_core::window::Event::Focused) => {
-                    return iced::widget::operation::focus("search_input");
+                    return iced::widget::operation::focus(SEARCH_INPUT_ID);
                 },
                 iced::Event::InputMethod(iced_core::input_method::Event::Closed) => {
-                    return iced::widget::operation::focus("search_input");
+                    return iced::widget::operation::focus(SEARCH_INPUT_ID);
                 },
                 iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, .. }) => {
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) {
                         return iced::exit();
                     }
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowUp) {
-                        state.selection_move(-1);
+                        return state.selection_move(-1);
                     }
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::ArrowDown) {
-                        state.selection_move(1);
+                        return state.selection_move(1);
                     }
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::PageUp) {
-                        state.selection_index = 0;
+                        return state.selection_set(0);
                     }
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::PageDown) {
-                        state.selection_index = state.filtered_entries.len().saturating_sub(1);
+                        return state.selection_set(state.filtered_entries.len().saturating_sub(1));
                     }
                 },
                 iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => {
@@ -120,8 +188,7 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
                 _ => {}
             };
         },
-        _ => {}
-    };
+    }
     
     Task::none()
 }
@@ -166,8 +233,8 @@ fn view(state: &State) -> Element<'_, Message> {
             ]
         )
         .width(iced::Length::Fill)
-        .height(iced::Length::Fixed(48.0))
-    .style(move |theme: &iced::Theme, _status| {
+        .height(iced::Length::Fixed(ENTRY_HEIGHT))
+        .style(move |theme: &iced::Theme, _status| {
             let mut s = iced::widget::button::Style::default();
             s.text_color = theme.palette().text;
 
@@ -185,7 +252,7 @@ fn view(state: &State) -> Element<'_, Message> {
     iced::widget::column![
         iced::widget::text_input("Search", &state.query)
             .on_input(|s| Message::SetQuery(s))
-            .id("search_input")
+            .id(SEARCH_INPUT_ID)
             .style(|theme, _status| {
                 let mut s = iced::widget::text_input::default(&theme, _status);
                 s.border.color = iced::Color::from_rgba(0.0, 0.0, 0.0, 0.0);
@@ -195,6 +262,8 @@ fn view(state: &State) -> Element<'_, Message> {
             .padding(10),
         iced::widget::scrollable(iced::widget::column(elements))
             .width(iced::Length::Fill)
+            .on_scroll(|v|Message::ScrollEntries(v))
+            .id(ENTRIES_SCROLL_CONTAINER_ID)
     ].into()
 }
 

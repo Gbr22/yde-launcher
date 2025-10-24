@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 iced = { path = "./crates/iced", features = ["image"] }
 iced_core = { path = "./crates/iced/core" }
+iced_widget = { path = "./crates/iced/widget" }
 anyhow = "1.0"
 rayon = "1.11.0"
 freedesktop_entry_parser = "2.0.1"
