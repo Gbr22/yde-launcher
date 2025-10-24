@@ -47,7 +47,15 @@ impl State {
             if self.query.is_empty() {
                 Some((0, entry))
             } else {
-                matcher.fuzzy_match(entry.title(), &self.query).map(|score|{
+                let title_match = matcher.fuzzy_match(entry.title(), &self.query);
+                let generic_name_match = entry.generic_name().and_then(|gn| matcher.fuzzy_match(gn, &self.query));
+                let score = match (title_match, generic_name_match) {
+                    (Some(ts), Some(gs)) => Some(ts.max(gs)),
+                    (Some(ts), None) => Some(ts),
+                    (None, Some(gs)) => Some(gs),
+                    (None, None) => None,
+                };
+                score.map(|score| {
                     (score, entry)
                 })
             }
@@ -116,6 +124,44 @@ impl State {
             return self.selection_set(self.selection_index.saturating_add(direction as usize));
         }
     }
+    fn get_selected_entry(&self) -> Option<&DesktopEntry> {
+        self.filtered_entries.get(self.selection_index)
+    }
+    fn launch_entry(&self, entry: &impl Entry) -> Task<Message> {
+        let placeholder_regex = regex::Regex::new(r"%\w").expect("Hardcoded regex should compile");
+        println!("Launching entry: {:?}", entry);
+        let command = entry.launch_command().map(|cmd|{
+            placeholder_regex.replace_all(&cmd, "").replace("%%","%")
+        });
+
+        if let Some(command) = command {
+            println!("Launching command: '{}'", command);
+
+            #[cfg(target_family = "unix")]
+            {
+                use std::process::Command;
+                use std::os::unix::process::CommandExt;
+
+                unsafe {
+                    let _ = Command::new("sh")
+                        .arg("-c")
+                        .arg(command)
+                        .pre_exec(|| {
+                            match libc::setsid() {
+                                -1 => Err(std::io::Error::last_os_error()),
+                                _ => Ok(()),
+                            }
+                        })
+                        .stdin(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn();
+                };
+            }
+        }
+
+        iced::exit()
+    }
 }
 
 
@@ -178,6 +224,11 @@ fn update(state: &mut State, message: Message) -> iced::Task<Message> {
                     }
                     if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::PageDown) {
                         return state.selection_set(state.filtered_entries.len().saturating_sub(1));
+                    }
+                    if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter) {
+                        if let Some(entry) = state.get_selected_entry() {
+                            return state.launch_entry(entry);
+                        }
                     }
                 },
                 iced::Event::Keyboard(iced::keyboard::Event::KeyReleased { key, .. }) => {

@@ -76,6 +76,12 @@ impl Entry for DesktopEntry {
 
         str.as_str()
     }
+    fn generic_name(&self) -> Option<&str> {
+        self.entry.get("Desktop Entry", "GenericName")
+            .map(|e|e.first())
+            .flatten()
+            .map(|e|e.as_str())
+    }
 
     fn description(&self) -> Option<&str> {
         self.entry.get("Desktop Entry", "Comment")
@@ -86,6 +92,13 @@ impl Entry for DesktopEntry {
     
     fn icon_path(&self) -> Option<&PathBuf> {
         self.icon.as_ref()
+    }
+
+    fn launch_command(&self) -> Option<&str> {
+        self.entry.get("Desktop Entry", "Exec")
+            .map(|e| e.first())
+            .flatten()
+            .map(|e| e.as_str())
     }
 }
 
