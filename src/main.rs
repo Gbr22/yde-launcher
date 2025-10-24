@@ -135,27 +135,42 @@ impl State {
         });
 
         if let Some(command) = command {
-            println!("Launching command: '{}'", command);
-
+            let Ok(args) = shell_words::split(&command) else {
+                return iced::exit();
+            };
+            let args: Vec<String> = args.iter().flat_map(|part|{
+                if part == "%%" {
+                    Some("%".to_string())
+                } else if part.starts_with("%") {
+                    None
+                } else {
+                    Some(part.clone())
+                }
+            }).collect();
+            
+            println!("Launching command: {:?}", args);
+            
             #[cfg(target_family = "unix")]
             {
                 use std::process::Command;
                 use std::os::unix::process::CommandExt;
+                
+                let devnull = std::fs::File::open("/dev/null").unwrap();
 
                 unsafe {
-                    let _ = Command::new("sh")
-                        .arg("-c")
-                        .arg(command)
+                    Command::new(&args[0])
+                        .args(&args[1..])
+                        .stdin(devnull.try_clone().unwrap())
+                        .stdout(devnull.try_clone().unwrap())
+                        .stderr(devnull)
                         .pre_exec(|| {
-                            match libc::setsid() {
-                                -1 => Err(std::io::Error::last_os_error()),
-                                _ => Ok(()),
+                            if libc::setsid() == -1 {
+                                return Err(std::io::Error::last_os_error());
                             }
+                            Ok(())
                         })
-                        .stdin(std::process::Stdio::null())
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .spawn();
+                        .spawn()
+                        .expect("Failed to launch command");
                 };
             }
         }
