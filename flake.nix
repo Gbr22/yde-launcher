@@ -17,19 +17,24 @@
         buildInputs = with pkgs; [
           pkg-config
           rust-bin.stable.latest.default
+          libxcb
           libxkbcommon
           vulkan-loader
           wayland
         ];
-        libPath = pkgs.lib.makeLibraryPath buildInputs;
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+        ];
+        libPath = pkgs.lib.makeLibraryPath (buildInputs ++ nativeBuildInputs);
         runScript = pkgs.writeShellScriptBin "yde-launcher" ''
           #!/usr/bin/env bash
-          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${libPath}";
-          cargo run
+          nix develop --command cargo run
         '';
         shell = pkgs.mkShell {
+          packages = buildInputs ++ nativeBuildInputs;
+
           shellHook = ''
-            export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${libPath}";
+            export LD_LIBRARY_PATH="${libPath}:$LD_LIBRARY_PATH";
           '';
         };
         releaseBuild = pkgs.rustPlatform.buildRustPackage {
@@ -38,15 +43,12 @@
 
           cargoLock = {
             lockFile = ./Cargo.lock;
-            outputHashes = {
-              "cryoglyph-0.1.0" = "1rqk1bz8l1nn3m1qh4ax50ca8lhl07xj2vc0d7xq813r6y3spkr5";
-              "dpi-0.1.1" = "0h4dcyl8s0wiwki7r1l29zkfcy9h6c0q5s7ia4iwj92j46aga2d5";
-              "iced-0.14.0-dev" = "0lp4qqd0zgd0cjy1lmnq8jixha2sb3q3bhw1v29k03k2sfnw4z7b";
-            };
           };
 
-          nativeBuildInputs = [ pkgs.pkg-config ];
+          nativeBuildInputs = nativeBuildInputs;
           buildInputs = buildInputs;
+
+          LD_LIBRARY_PATH = libPath;
 
           meta = {
             description = "YDE Launcher";

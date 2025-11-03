@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-iced = { features = ["image"], git = "https://github.com/iced-rs/iced.git", rev = "d5608162def4688052c75e43f5d1b04268af4d06", version = "0.14.0-dev" }
-iced_core = { git = "https://github.com/iced-rs/iced.git", rev = "d5608162def4688052c75e43f5d1b04268af4d06", version = "0.14.0-dev" }
-iced_widget = { git = "https://github.com/iced-rs/iced.git", rev = "d5608162def4688052c75e43f5d1b04268af4d06", version = "0.14.0-dev" }
 anyhow = "1.0"
 rayon = "1.11.0"
 freedesktop_entry_parser = "2.0.1"
@@ -15,3 +12,5 @@ fuzzy-matcher = "0.3.7"
 libc = "0.2.177"
 regex = "1.12.2"
 shell-words = "1.1.0"
+gpui = "0.2.2"
+gpui-component = "0.3.1"
