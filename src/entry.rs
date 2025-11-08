@@ -1,10 +1,10 @@
-use std::{fmt::Debug, path::PathBuf, usize};
+use std::{fmt::Debug};
 
 pub trait Entry: Debug {
     fn id(&self) -> &str;
     fn title(&self) -> &str;
     fn generic_name(&self) -> Option<&str>;
     fn description(&self) -> Option<&str>;
-    fn icon_path(&self, size: (u32, u32)) -> Option<&PathBuf>;
+    fn icon(&self) -> Option<&str>;
     fn launch_command(&self) -> Option<&str>;
 }

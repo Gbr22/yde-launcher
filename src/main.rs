@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::path::{PathBuf};
 use std::rc::Rc;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
@@ -5,6 +7,7 @@ use gpui::*;
 use gpui_component::{ActiveTheme, Root, StyledExt, Theme, VirtualListScrollHandle, v_virtual_list};
 use gpui_component::input::{InputEvent, InputState, TextInput};
 use gpui_component::Selectable;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 mod data;
 mod entry;
@@ -20,6 +23,7 @@ pub struct State {
     entries: Vec<DesktopEntry>,
     filtered_entries: Vec<DesktopEntry>,
     scroll_handle: VirtualListScrollHandle,
+    icon_map: HashMap<String, PathBuf>,
 }
 
 impl Default for State {
@@ -31,6 +35,7 @@ impl Default for State {
             entries: Vec::new(),
             filtered_entries: Vec::new(),
             scroll_handle: VirtualListScrollHandle::new(),
+            icon_map: HashMap::new(),
         }
     }
 }
@@ -38,6 +43,49 @@ impl Default for State {
 impl Global for State {}
 
 impl State {
+    fn find_icons(&mut self) {
+        let theme_name = linicon_theme::get_icon_theme();
+        let entries = &self.entries;
+        self.icon_map.clear();
+        let iter: Vec<(String, PathBuf)> = entries.par_iter().map(|entry|{
+            let icon = entry.icon();
+            if let Some(icon) = icon {
+                let path_buf = PathBuf::from(icon);
+                if path_buf.is_absolute() {
+                    return Some((icon.to_string(), path_buf));
+                }
+
+                if let Some(theme_name) = &theme_name {
+                    let icon_path = freedesktop_icons::lookup(icon)
+                        .with_theme(&theme_name)
+                        .force_svg()
+                        .with_size(64)
+                        .find();
+                    if let Some(icon_path) = icon_path {
+                        return Some((icon.to_string(), icon_path));
+                    }
+                }
+
+                let icon_path = freedesktop_icons::lookup(icon)
+                    .with_theme("hicolor")
+                    .force_svg()
+                    .with_size(64)
+                    .find();
+                if let Some(icon_path) = icon_path {
+                    return Some((icon.to_string(), icon_path));
+                }
+            }
+            return None;
+        }).flatten().collect();
+        for (icon_name, icon_path) in iter {
+            self.icon_map.insert(icon_name, icon_path);
+        }
+    }
+    fn refresh_entries(&mut self) {
+        self.entries = data::get_desktop_entries();
+        self.update_filtered_entries();
+        self.find_icons();
+    }
     fn update_filtered_entries(&mut self) {
         let matcher = SkimMatcherV2::default();
         let mut vec = self.entries.iter().flat_map(|entry| {
@@ -86,23 +134,20 @@ impl State {
         self.filtered_entries.get(self.selection_index)
     }
     fn launch_entry(&self, entry: &impl Entry) {
-        let placeholder_regex = regex::Regex::new(r"%\w").expect("Hardcoded regex should compile");
         println!("Launching entry: {:?}", entry);
-        let command = entry.launch_command().map(|cmd|{
-            placeholder_regex.replace_all(&cmd, "").replace("%%","%")
-        });
+        let command = entry.launch_command();
 
         if let Some(command) = command {
             let Ok(args) = shell_words::split(&command) else {
                 return;
             };
-            let args: Vec<String> = args.iter().flat_map(|part|{
+            let args: Vec<String> = args.into_iter().flat_map(|part|{
                 if part == "%%" {
                     Some("%".to_string())
                 } else if part.starts_with("%") {
                     None
                 } else {
-                    Some(part.clone())
+                    Some(part)
                 }
             }).collect();
             
@@ -181,7 +226,8 @@ impl Render for App {
                                         return div();
                                     };
 
-                                    let img_src = entry.icon_path((128, 128));
+                                    let img_src = entry.icon().map(|icon|state.icon_map.get(icon)).flatten();
+
                                     let img_el = match img_src {
                                         Some(src) => vec![
                                             img(src.to_owned())
@@ -269,10 +315,8 @@ impl App {
 fn main() {
     env_logger::init();
     let app = Application::new();
-    let entries = data::get_desktop_entries();
     let mut state = State::default();
-    state.entries = entries.clone();
-    state.update_filtered_entries();
+    state.refresh_entries();
 
     app.run(move |cx| {
         gpui_component::init(cx);

@@ -86,7 +86,6 @@ pub struct Icon {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopEntry {
     path: PathBuf,
-    icons: Vec<Icon>,
     entry: freedesktop_entry_parser::Entry,
 }
 
@@ -115,35 +114,11 @@ impl Entry for DesktopEntry {
             .map(|e|e.as_str())
     }
 
-    fn icon_path(&self, size: (u32, u32)) -> Option<&PathBuf> {
-        let (width, height) = size;
-        let scalable = self.icons.iter().find(|icon| matches!(icon.size, IconSize::Scalable));
-        if let Some(scalable) = scalable {
-            return Some(&scalable.path);
-        }
-
-        let mut best = None;
-        
-        for icon in self.icons.iter() {
-            if let IconSize::Fixed(size) = &icon.size {
-                let reaches_min_size = size.width >= width && size.height >= height;
-                if !reaches_min_size {
-                    continue;
-                }
-                if best.is_none() {
-                    best = Some(icon);
-                }
-                else if let Some(best_icon) = best {
-                    if let IconSize::Fixed(best_size) = &best_icon.size {
-                        if size.width <= best_size.width && size.height <= best_size.height {
-                            best = Some(icon);
-                        }
-                    }
-                }
-            }
-        }
-
-        best.map(|e|&e.path)
+    fn icon(&self) -> Option<&str> {
+        self.entry.get("Desktop Entry", "Icon")
+            .map(|e| e.first())
+            .flatten()
+            .map(|e| e.as_str())
     }
 
     fn launch_command(&self) -> Option<&str> {
@@ -186,48 +161,6 @@ pub fn parse_icon_size(icon_size: impl AsRef<str>) -> Option<IconSize> {
 
 pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error> {
     let entry = freedesktop_entry_parser::parse_entry(path)?;
-    let icon_value = entry.get("Desktop Entry", "Icon")
-        .map(|e| e.first())
-        .flatten()
-        .map(|e| e.as_str());
 
-    let icons = if let Some(icon_value) = icon_value {
-        let mut icons: Vec<Icon> = Vec::new();
-        let icon_path = PathBuf::from(icon_value);
-
-        if !icon_path.is_absolute() {
-            let data_dirs = get_data_dirs();
-            for dir in data_dirs {
-                let theme = "hicolor";
-                let theme_dir = dir.join("icons").join(&theme);
-                let children = theme_dir.read_dir();
-                if let Ok(children) = children {
-                    for child in children.flatten() {
-                        let resolution_path = child.path();
-                        let size = parse_icon_size(child.file_name().to_string_lossy());
-                        let Some(size) = size else {
-                            continue;
-                        };
-                        let extensions = vec!["png", "svg"];
-                        for ext in extensions {
-                            let possible_path = resolution_path.join(format!("apps/{}.{}", icon_value, ext));
-                            if possible_path.exists() {
-                                icons.push(Icon {
-                                    path: possible_path,
-                                    size: size.clone(),
-                                    theme: Some(theme.to_string()),
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        icons
-    } else {
-        Vec::new()
-    };
-
-    Ok(DesktopEntry { entry, path: path.clone(), icons })
+    Ok(DesktopEntry { entry, path: path.clone() })
 }

@@ -22,6 +22,12 @@ dependencies = [
 
 [[package]]
 name = "ahash"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0453232ace82dee0dd0b4c87a59bd90f7b53b314f3e0f61fe2ee7c8a16482289"
+
+[[package]]
+name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
@@ -1376,6 +1382,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dlv-list"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68df3f2b690c1b86e65ef7830956aededf3cb0a16f898f79b9a6f421a7b6211b"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1841,6 +1856,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "freedesktop-icons"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95f87364ea709292a3b3f74014ce3ee78412c89807eea75a358c8e029b000994"
+dependencies = [
+ "dirs 5.0.1",
+ "ini_core",
+ "once_cell",
+ "thiserror 1.0.69",
+ "tracing",
+ "xdg 2.5.2",
+]
+
+[[package]]
+name = "freedesktop_entry_parser"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db9c27b72f19a99a895f8ca89e2d26e4ef31013376e56fdafef697627306c3e4"
+dependencies = [
+ "nom 7.1.3",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2498,6 +2537,15 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+dependencies = [
+ "ahash 0.4.8",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
@@ -2724,6 +2772,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "icon"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72bdb82572b56fdb8cfa697a7ea7494df3656ee4460e6e1870023a77c5b44e99"
+dependencies = [
+ "freedesktop_entry_parser 1.3.0",
+ "thiserror 2.0.17",
+ "xdg 3.0.0",
+]
+
+[[package]]
 name = "icu_collections"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2897,6 +2956,15 @@ dependencies = [
  "hashbrown 0.16.0",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "ini_core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a467a31a9f439b5262fa99c17084537bff57f24703d5a09a2b5c9657ec73a61"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]
@@ -3208,6 +3276,16 @@ dependencies = [
  "bitflags 2.10.0",
  "libc",
  "redox_syscall 0.5.18",
+]
+
+[[package]]
+name = "linicon-theme"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4f8240c33bb08c5d8b8cdea87b683b05e61037aa76ff26bef40672cc6ecbb80"
+dependencies = [
+ "freedesktop_entry_parser 1.3.0",
+ "rust-ini",
 ]
 
 [[package]]
@@ -3949,6 +4027,16 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "ordered-multimap"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c672c7ad9ec066e428c00eb917124a06f08db19e2584de982cc34b1f4c12485"
+dependencies = [
+ "dlv-list",
+ "hashbrown 0.9.1",
+]
 
 [[package]]
 name = "ordered-stream"
@@ -4802,6 +4890,16 @@ dependencies = [
  "siphasher",
  "toml 0.8.23",
  "triomphe",
+]
+
+[[package]]
+name = "rust-ini"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63471c4aa97a1cf8332a5f97709a79a4234698de6a1f5087faf66f2dae810e22"
+dependencies = [
+ "cfg-if",
+ "ordered-multimap",
 ]
 
 [[package]]
@@ -7314,6 +7412,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bec9e4a500ca8864c5b47b8b482a73d62e4237670e5b5f1d6b9e3cae50f28f2b"
 
 [[package]]
+name = "xdg"
+version = "2.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
+
+[[package]]
+name = "xdg"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fb433233f2df9344722454bc7e96465c9d03bff9d77c248f9e7523fe79585b5"
+
+[[package]]
 name = "xim-ctext"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7378,11 +7488,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "env_logger",
- "freedesktop_entry_parser",
+ "freedesktop-icons",
+ "freedesktop_entry_parser 2.0.1",
  "fuzzy-matcher",
  "gpui",
  "gpui-component",
+ "icon",
  "libc",
+ "linicon-theme",
  "log",
  "once_cell",
  "rayon",
@@ -7614,7 +7727,7 @@ version = "0.4.0-zed"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c0b46ed118eba34d9ba53d94ddc0b665e0e06a2cf874cfa2dd5dec278148642"
 dependencies = [
- "ahash",
+ "ahash 0.8.12",
  "hashbrown 0.14.5",
  "log",
  "x11rb",
