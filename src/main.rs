@@ -63,6 +63,7 @@ impl State {
     }
     fn set_query(&mut self, query: String) {
         self.query = query;
+        self.set_selection_index(0);
         self.update_filtered_entries();
     }
     fn set_selection_index(&mut self, index: usize) {

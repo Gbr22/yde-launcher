@@ -45,6 +45,13 @@ pub fn get_desktop_entries() -> Vec<DesktopEntry> {
                     return None;
                 }
 
+                let hidden = entry.entry.get("Desktop Entry", "Hidden")
+                    .map(|e| e.iter().filter(|t| t.as_str() == "true").collect::<Vec<_>>().len() > 0).unwrap_or(false);
+
+                if hidden {
+                    return None;
+                }
+
                 Some(entry)
             },
             Err(_) => {
@@ -201,17 +208,16 @@ pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error
                         let Some(size) = size else {
                             continue;
                         };
-                        let ext = match size {
-                            IconSize::Scalable => "svg",
-                            IconSize::Fixed(_) => "png",
-                        };
-                        let possible_path = resolution_path.join(format!("apps/{}.{}", icon_value, ext));
-                        if possible_path.exists() {
-                            icons.push(Icon {
-                                path: possible_path,
-                                size: size,
-                                theme: Some(theme.to_string()),
-                            });
+                        let extensions = vec!["png", "svg"];
+                        for ext in extensions {
+                            let possible_path = resolution_path.join(format!("apps/{}.{}", icon_value, ext));
+                            if possible_path.exists() {
+                                icons.push(Icon {
+                                    path: possible_path,
+                                    size: size.clone(),
+                                    theme: Some(theme.to_string()),
+                                });
+                            }
                         }
                     }
                 }
