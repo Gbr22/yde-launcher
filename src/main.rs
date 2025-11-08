@@ -156,26 +156,14 @@ impl State {
             #[cfg(target_family = "unix")]
             {
                 use std::process::Command;
-                use std::os::unix::process::CommandExt;
                 
-                let devnull = std::fs::File::open("/dev/null").unwrap();
-
-                unsafe {
-                    Command::new(&args[0])
-                        .args(&args[1..])
-                        .stdin(devnull.try_clone().unwrap())
-                        .stdout(devnull.try_clone().unwrap())
-                        .stderr(devnull)
-                        .pre_exec(|| {
-                            if libc::setsid() == -1 {
-                                return Err(std::io::Error::last_os_error());
-                            }
-                            Ok(())
-                        })
-                        .spawn()
-                        .expect("Failed to launch command");
-                };
+                Command::new(&args[0])
+                    .args(&args[1..])
+                    .spawn()
+                    .expect("Failed to launch command");
             }
+            
+            std::process::exit(0);
         }
     }
 }
