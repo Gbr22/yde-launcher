@@ -50,6 +50,10 @@
 
           LD_LIBRARY_PATH = libPath;
 
+          postFixup = ''
+            patchelf --set-rpath ${libPath} $out/bin/yde-launcher
+          '';
+
           meta = {
             description = "YDE Launcher";
             maintainers = [];
