@@ -1,5 +1,3 @@
-use std::sync::{RwLock};
-use once_cell::sync::Lazy;
 use std::{path::PathBuf};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -58,10 +56,30 @@ pub fn get_desktop_entries() -> Vec<DesktopEntry> {
     entries
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FixedIconSize {
+    pub width: u32,
+    pub height: u32,
+    pub scale: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IconSize {
+    Scalable,
+    Fixed(FixedIconSize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Icon {
+    pub theme: Option<String>,
+    pub path: PathBuf,
+    pub size: IconSize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopEntry {
     path: PathBuf,
-    icon: Option<PathBuf>,
+    icons: Vec<Icon>,
     entry: freedesktop_entry_parser::Entry,
 }
 
@@ -89,9 +107,36 @@ impl Entry for DesktopEntry {
             .flatten()
             .map(|e|e.as_str())
     }
-    
-    fn icon_path(&self) -> Option<&PathBuf> {
-        self.icon.as_ref()
+
+    fn icon_path(&self, size: (u32, u32)) -> Option<&PathBuf> {
+        let (width, height) = size;
+        let scalable = self.icons.iter().find(|icon| matches!(icon.size, IconSize::Scalable));
+        if let Some(scalable) = scalable {
+            return Some(&scalable.path);
+        }
+
+        let mut best = None;
+        
+        for icon in self.icons.iter() {
+            if let IconSize::Fixed(size) = &icon.size {
+                let reaches_min_size = size.width >= width && size.height >= height;
+                if !reaches_min_size {
+                    continue;
+                }
+                if best.is_none() {
+                    best = Some(icon);
+                }
+                else if let Some(best_icon) = best {
+                    if let IconSize::Fixed(best_size) = &best_icon.size {
+                        if size.width <= best_size.width && size.height <= best_size.height {
+                            best = Some(icon);
+                        }
+                    }
+                }
+            }
+        }
+
+        best.map(|e|&e.path)
     }
 
     fn launch_command(&self) -> Option<&str> {
@@ -102,6 +147,36 @@ impl Entry for DesktopEntry {
     }
 }
 
+pub fn parse_icon_size(icon_size: impl AsRef<str>) -> Option<IconSize> {
+    let icon_size = icon_size.as_ref();
+    if icon_size == "scalable" {
+        return Some(IconSize::Scalable);
+    }
+
+    let parts: Vec<&str> = icon_size.split('@').collect();
+    let size = parts.get(0).unwrap_or(&"").to_string();
+    let scale = parts.get(1).unwrap_or(&"").to_string();
+    let scale = if scale.is_empty() { 1 } else {
+        if let Ok(scale) = scale.parse::<u32>() {
+            scale
+        } else {
+            return None;
+        }
+    };
+    let parts = size.split('x').collect::<Vec<&str>>();
+    if parts.len() != 2 {
+        return None;
+    }
+
+    let (width, height) = (parts[0], parts[1]);
+    let (width, height) = (width.parse::<u32>(), height.parse::<u32>());
+    if let (Ok(width), Ok(height)) = (width, height) {
+        return Some(IconSize::Fixed(FixedIconSize { width, height, scale }));
+    }
+
+    None
+}
+
 pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error> {
     let entry = freedesktop_entry_parser::parse_entry(path)?;
     let icon_value = entry.get("Desktop Entry", "Icon")
@@ -109,33 +184,44 @@ pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error
         .flatten()
         .map(|e| e.as_str());
 
-    let icon_path: Option<PathBuf> = icon_value.map(|icon_value| {
+    let icons = if let Some(icon_value) = icon_value {
+        let mut icons: Vec<Icon> = Vec::new();
         let icon_path = PathBuf::from(icon_value);
 
-        if icon_path.is_absolute() {
-            Some(icon_path)
-        } else {
+        if !icon_path.is_absolute() {
             let data_dirs = get_data_dirs();
             for dir in data_dirs {
-                let resolutions = vec![
-                    "256x256",
-                    "128x128",
-                    "64x64",
-                    "48x48",
-                    "32x32",
-                    "24x24",
-                    "16x16",
-                ];
-                for resolution in resolutions {
-                    let possible_path = dir.join(format!("icons/hicolor/{}/apps/{}.png", resolution, icon_value));
-                    if possible_path.exists() {
-                        return Some(possible_path);
+                let theme = "hicolor";
+                let theme_dir = dir.join("icons").join(&theme);
+                let children = theme_dir.read_dir();
+                if let Ok(children) = children {
+                    for child in children.flatten() {
+                        let resolution_path = child.path();
+                        let size = parse_icon_size(child.file_name().to_string_lossy());
+                        let Some(size) = size else {
+                            continue;
+                        };
+                        let ext = match size {
+                            IconSize::Scalable => "svg",
+                            IconSize::Fixed(_) => "png",
+                        };
+                        let possible_path = resolution_path.join(format!("apps/{}.{}", icon_value, ext));
+                        if possible_path.exists() {
+                            icons.push(Icon {
+                                path: possible_path,
+                                size: size,
+                                theme: Some(theme.to_string()),
+                            });
+                        }
                     }
                 }
             }
-            None
         }
-    }).flatten();
 
-    Ok(DesktopEntry { entry, path: path.clone(), icon: icon_path })
+        icons
+    } else {
+        Vec::new()
+    };
+
+    Ok(DesktopEntry { entry, path: path.clone(), icons })
 }

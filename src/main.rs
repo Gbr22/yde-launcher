@@ -180,13 +180,12 @@ impl Render for App {
                                         return div();
                                     };
 
-                                    let img_src = entry.icon_path().and_then(|path| path.to_str().map(|s| s.to_string()));
+                                    let img_src = entry.icon_path((128, 128));
                                     let img_el = match img_src {
                                         Some(src) => vec![
-                                            img(src)
+                                            img(src.to_owned())
                                             .w_full()
                                             .h_full()
-                                            .bg(rgb(0x00FF00))
                                             .object_fit(ObjectFit::Contain)
                                         ],
                                         None => vec![],
@@ -204,6 +203,7 @@ impl Render for App {
                                             .flex_basis(px(48.))
                                             .flex_none()
                                             .h_full()
+                                            .p_1()
                                             .children(img_el)
                                         )
                                         .child(
@@ -266,6 +266,7 @@ impl App {
 }
 
 fn main() {
+    env_logger::init();
     let app = Application::new();
     let entries = data::get_desktop_entries();
     let mut state = State::default();
