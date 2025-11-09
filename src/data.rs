@@ -108,9 +108,24 @@ impl Entry for DesktopEntry {
         match &self.description {
             Some(desc) => return Some(desc.clone()),
             None => {
-                return self.generic_name.clone();
+                match &self.generic_name {
+                    Some(gn) => return Some(gn.clone()),
+                    None => {
+                        if self.is_terminal() {
+                            return Some(SharedString::from("Terminal Application"));
+                        } else {
+                            return Some(SharedString::from("Application"));
+                        }
+                    },
+                }
             }
         }
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.entry.get("Desktop Entry", "Terminal")
+            .map(|e| e.iter().filter(|t| t.as_str() == "true").collect::<Vec<_>>().len() > 0)
+            .unwrap_or(false)
     }
 
     fn icon(&self) -> Option<&str> {

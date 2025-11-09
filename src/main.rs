@@ -161,11 +161,19 @@ impl State {
             #[cfg(target_family = "unix")]
             {
                 use std::process::Command;
-                
-                Command::new(&args[0])
-                    .args(&args[1..])
-                    .spawn()
-                    .expect("Failed to launch command");
+
+                if entry.is_terminal() {
+                    Command::new("xdg-terminal")
+                        .args(&args)
+                        .spawn()
+                        .expect("Failed to launch command");
+                }
+                else {
+                    Command::new(&args[0])
+                        .args(&args[1..])
+                        .spawn()
+                        .expect("Failed to launch command");
+                }
             }
             
             std::process::exit(0);

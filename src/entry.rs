@@ -9,4 +9,7 @@ pub trait Entry: Debug {
     fn description(&self) -> Option<SharedString>;
     fn icon(&self) -> Option<&str>;
     fn launch_command(&self) -> Option<&str>;
+    fn is_terminal(&self) -> bool {
+        false
+    }
 }
