@@ -1,4 +1,5 @@
 use std::{path::PathBuf};
+use gpui::SharedString;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
@@ -87,31 +88,29 @@ pub struct Icon {
 pub struct DesktopEntry {
     path: PathBuf,
     entry: freedesktop_entry_parser::Entry,
+    title: SharedString,
+    generic_name: Option<SharedString>,
+    description: Option<SharedString>,
 }
 
 impl Entry for DesktopEntry {
     fn id(&self) -> &str {
         self.path.to_str().unwrap_or_default()
     }
-    fn title(&self) -> &str {
-        let Some(str) = self.entry.get("Desktop Entry", "Name").map(|e|e.first()).flatten() else {
-            return "Unnamed";
-        };
-
-        str.as_str()
+    fn title(&self) -> SharedString {
+        self.title.clone()
     }
-    fn generic_name(&self) -> Option<&str> {
-        self.entry.get("Desktop Entry", "GenericName")
-            .map(|e|e.first())
-            .flatten()
-            .map(|e|e.as_str())
+    fn generic_name(&self) -> Option<SharedString> {
+        self.generic_name.clone()
     }
 
-    fn description(&self) -> Option<&str> {
-        self.entry.get("Desktop Entry", "Comment")
-            .map(|e|e.first())
-            .flatten()
-            .map(|e|e.as_str())
+    fn description(&self) -> Option<SharedString> {
+        match &self.description {
+            Some(desc) => return Some(desc.clone()),
+            None => {
+                return self.generic_name.clone();
+            }
+        }
     }
 
     fn icon(&self) -> Option<&str> {
@@ -162,5 +161,27 @@ pub fn parse_icon_size(icon_size: impl AsRef<str>) -> Option<IconSize> {
 pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error> {
     let entry = freedesktop_entry_parser::parse_entry(path)?;
 
-    Ok(DesktopEntry { entry, path: path.clone() })
+    let title = {
+        entry.get("Desktop Entry", "Name")
+            .map(|e|e.first())
+            .flatten()
+            .map(SharedString::from)
+            .unwrap_or(SharedString::new("Unnamed"))
+    };
+
+    let generic_name = {
+        entry.get("Desktop Entry", "GenericName")
+            .map(|e|e.first())
+            .flatten()
+            .map(SharedString::from)
+    };
+
+    let description = {
+        entry.get("Desktop Entry", "Comment")
+            .map(|e|e.first())
+            .flatten()
+            .map(SharedString::from)
+    };
+
+    Ok(DesktopEntry { entry, path: path.clone(), title, generic_name, description })
 }

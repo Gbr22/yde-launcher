@@ -97,8 +97,8 @@ impl State {
             if self.query.is_empty() {
                 Some((0, entry))
             } else {
-                let title_match = matcher.fuzzy_match(entry.title(), &self.query);
-                let generic_name_match = entry.generic_name().and_then(|gn| matcher.fuzzy_match(gn, &self.query));
+                let title_match = matcher.fuzzy_match(entry.title().as_str(), &self.query);
+                let generic_name_match = entry.generic_name().and_then(|gn| matcher.fuzzy_match(gn.as_str(), &self.query));
                 let score = match (title_match, generic_name_match) {
                     (Some(ts), Some(gs)) => Some(ts.max(gs)),
                     (Some(ts), None) => Some(ts),
@@ -110,7 +110,7 @@ impl State {
                 })
             }
         }).collect::<Vec<_>>();
-        vec.sort_by(|a,b|a.1.title().cmp(b.1.title()));
+        vec.sort_by(|a,b|a.1.title().as_str().cmp(b.1.title().as_str()));
         vec.sort_by(|a, b| b.0.cmp(&a.0));
         self.filtered_entries = vec.iter().map(|(_, entry)| (*entry).clone()).collect();
     }
