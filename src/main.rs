@@ -4,16 +4,19 @@ use std::rc::Rc;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use gpui::*;
-use gpui_component::{ActiveTheme, Root, StyledExt, Theme, VirtualListScrollHandle, v_virtual_list};
+use gpui_component::scroll::ScrollHandleOffsetable;
+use gpui_component::{Root, StyledExt, Theme, VirtualListScrollHandle, v_virtual_list};
 use gpui_component::input::{InputEvent, InputState, TextInput};
 use gpui_component::Selectable;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 mod data;
 mod entry;
+mod utils;
 
 use crate::data::DesktopEntry;
 use crate::entry::Entry;
+use crate::utils::WithAlpha;
 
 #[derive(Clone)]
 pub struct State {
@@ -23,6 +26,7 @@ pub struct State {
     entries: Vec<DesktopEntry>,
     filtered_entries: Vec<DesktopEntry>,
     scroll_handle: VirtualListScrollHandle,
+    scroll_view_bounds: Option<Bounds<Pixels>>,
     icon_map: HashMap<String, PathBuf>,
 }
 
@@ -36,6 +40,7 @@ impl Default for State {
             filtered_entries: Vec::new(),
             scroll_handle: VirtualListScrollHandle::new(),
             icon_map: HashMap::new(),
+            scroll_view_bounds: None,
         }
     }
 }
@@ -176,16 +181,35 @@ impl Render for App {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let input = &self.input;
         let state = cx.global::<State>();
+        let scroll_height = f32::from(state.scroll_handle.max_offset().height);
+        let viewport_height: f32 = state.scroll_view_bounds.map(|b| f32::from(b.size.height)).unwrap_or(0.);
+        let scrollbar_height = (viewport_height * (viewport_height / scroll_height)).clamp(f32::min(16., viewport_height / 2.), viewport_height / 2.);
+        let scroll_ratio = (-f32::from(state.scroll_handle.offset().y) / scroll_height).clamp(0., 1.);
+        let scrollbar_top_offset = scroll_ratio * (viewport_height - scrollbar_height);
 
         div()
-            .v_flex()
-            .size_full()
+            .bg(rgb(0x1e1e2e).with_alpha(0.9))
+            .border_color(rgb(0x313244))
+            .border_1()
+            .rounded(px(4.))
+            .overflow_hidden()
+            .h_full()
+            .w_full()
+            .flex()
+            .flex_col()
             .content_stretch()
             .child(
                 div()
+                .h(px(32.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
                 .overflow_hidden()
                 .child(
                     TextInput::new(input)
+                    .h_full()
+                    .w_full()
                     .selected(true)
                     .appearance(false)
                 )
@@ -194,68 +218,114 @@ impl Render for App {
                 div()
                 .overflow_hidden()
                 .flex_1()
+                .flex()
+                .flex_row()
+                .flex_nowrap()
                 .child(
                     div()
-                    .w_full()
+                    .h_full()
+                    .flex_1()
+                    .p(px(8.))
+                    .pr_0()
+                    .pt_0()
+                    .on_children_prepainted(|bounds, _window, cx|{
+                        let bounds = bounds.first();
+                        let Some(bounds) = bounds else {
+                            return;
+                        };
+                        let state = cx.global_mut::<State>();
+                        state.scroll_view_bounds = Some(*bounds);
+                    })
+                    .child(
+                        v_virtual_list(
+                            cx.entity().clone(),
+                            "entry-list",
+                            Rc::new(vec![size(px(9999.), px(48.)); state.filtered_entries.len()]),
+                            |_view, visible_range, _window, cx| {
+                                visible_range
+                                    .map(|ix| {
+                                        let state = cx.global::<State>();
+                                        let is_selected = state.selection_index == ix;
+                                        let entry = state.filtered_entries.get(ix);
+
+                                        let Some(entry) = entry else {
+                                            return div();
+                                        };
+
+                                        let img_src = entry.icon().map(|icon|state.icon_map.get(icon)).flatten();
+
+                                        let img_el = match img_src {
+                                            Some(src) => vec![
+                                                img(src.to_owned())
+                                                .w_full()
+                                                .h_full()
+                                                .object_fit(ObjectFit::Contain)
+                                            ],
+                                            None => vec![],
+                                        };
+
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .overflow_hidden()
+                                            .h(px(48.))
+                                            .rounded(px(4.))
+                                            .w_full()
+                                            .overflow_hidden()
+                                            .bg(if is_selected { rgb(0x313244).with_alpha(0.8) } else { rgba(0x0).into() })
+                                            .child(
+                                                div()
+                                                .flex_basis(px(48.))
+                                                .flex_none()
+                                                .h_full()
+                                                .p_1()
+                                                .children(img_el)
+                                            )
+                                            .child(
+                                                div()
+                                                .flex_1()
+                                                .w_full()
+                                                .overflow_hidden()
+                                                .child(
+                                                    div()
+                                                    .child(entry.title().to_string())
+                                                    .text_size(px(16.))
+                                                    .overflow_hidden()
+                                                    .w_full()
+                                                    .text_ellipsis()
+                                                )
+                                                .child(
+                                                    div()
+                                                    .child(entry.description().unwrap_or_default().to_string())
+                                                    .text_size(px(14.))
+                                                    .text_color(rgb(0xbac2de))
+                                                    .overflow_hidden()
+                                                    .w_full()
+                                                    .text_ellipsis()
+                                                )
+                                            )
+                                    })
+                                    .collect()
+                            },
+                        )
+                        .track_scroll(&state.scroll_handle)
+                    )
                 )
                 .child(
-                    v_virtual_list(
-                        cx.entity().clone(),
-                        "entry-list",
-                        Rc::new(vec![size(px(9999.), px(48.)); state.filtered_entries.len()]),
-                        |_view, visible_range, _window, cx| {
-                            visible_range
-                                .map(|ix| {
-                                    let state = cx.global::<State>();
-                                    let is_selected = state.selection_index == ix;
-                                    let entry = state.filtered_entries.get(ix);
-
-                                    let Some(entry) = entry else {
-                                        return div();
-                                    };
-
-                                    let img_src = entry.icon().map(|icon|state.icon_map.get(icon)).flatten();
-
-                                    let img_el = match img_src {
-                                        Some(src) => vec![
-                                            img(src.to_owned())
-                                            .w_full()
-                                            .h_full()
-                                            .object_fit(ObjectFit::Contain)
-                                        ],
-                                        None => vec![],
-                                    };
-
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .overflow_hidden()
-                                        .h(px(48.))
-                                        .w_full()
-                                        .bg(if is_selected { cx.theme().accent } else { cx.theme().background })
-                                        .child(
-                                            div()
-                                            .flex_basis(px(48.))
-                                            .flex_none()
-                                            .h_full()
-                                            .p_1()
-                                            .children(img_el)
-                                        )
-                                        .child(
-                                            div()
-                                            .flex_1()
-                                            .child(
-                                                entry.title().to_string()
-                                            )
-                                            .child(
-                                                entry.description().unwrap_or_default().to_string()
-                                            )
-                                        )
-                                })
-                                .collect()
-                        },
+                    div()
+                    .h_full()
+                    .w(px(8.))
+                    .flex_shrink_0()
+                    .child(
+                        div()
+                        .absolute()
+                        .top(px(scrollbar_top_offset))
+                        .h(px(scrollbar_height))
+                        .w_full()
+                        .bg(rgb(0x7f849c))
+                        .rounded(px(4.))
                     )
-                    .track_scroll(&state.scroll_handle))
+                )
             )
     }
 }
@@ -308,7 +378,12 @@ fn main() {
 
     app.run(move |cx| {
         gpui_component::init(cx);
-        Theme::global_mut(cx).window_border = hsla(0., 0., 0., 0.);
+        Theme::global_mut(cx).window_border = rgba(0x0).into();
+        Theme::global_mut(cx).background = rgba(0x0).into();
+        Theme::global_mut(cx).muted_foreground = rgb(0xbac2de).into();
+        Theme::global_mut(cx).foreground = rgb(0xcdd6f4).into();
+        Theme::global_mut(cx).caret = rgb(0xb4befe).into();
+        Theme::global_mut(cx).selection = rgb(0x89dceb).with_alpha(0.3).into();
         cx.set_global(state);
         cx.observe_keystrokes(|event, _window, cx| {
             if event.keystroke.key == "up" {
