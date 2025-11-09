@@ -5,7 +5,7 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use gpui::*;
 use gpui_component::scroll::ScrollHandleOffsetable;
-use gpui_component::{Root, StyledExt, Theme, VirtualListScrollHandle, v_virtual_list};
+use gpui_component::{Root, Theme, VirtualListScrollHandle, v_virtual_list};
 use gpui_component::input::{InputEvent, InputState, TextInput};
 use gpui_component::Selectable;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -13,6 +13,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 mod data;
 mod entry;
 mod utils;
+mod actions;
 
 use crate::data::DesktopEntry;
 use crate::entry::Entry;
@@ -23,8 +24,8 @@ pub struct State {
     selection_index: usize,
     query: String,
     input_focus_handle: Option<FocusHandle>,
-    entries: Vec<DesktopEntry>,
-    filtered_entries: Vec<DesktopEntry>,
+    entries: Vec<Entry>,
+    filtered_entries: Vec<Entry>,
     scroll_handle: VirtualListScrollHandle,
     scroll_view_bounds: Option<Bounds<Pixels>>,
     icon_map: HashMap<String, PathBuf>,
@@ -87,7 +88,10 @@ impl State {
         }
     }
     fn refresh_entries(&mut self) {
-        self.entries = data::get_desktop_entries();
+        self.entries = vec![];
+        self.entries.extend(data::get_desktop_entries());
+        self.entries.extend(actions::get_builtin_actions());
+
         self.update_filtered_entries();
         self.find_icons();
     }
@@ -135,10 +139,10 @@ impl State {
         }
         self.update_filtered_entries();
     }
-    fn get_selected_entry(&self) -> Option<&DesktopEntry> {
+    fn get_selected_entry(&self) -> Option<&Entry> {
         self.filtered_entries.get(self.selection_index)
     }
-    fn launch_entry(&self, entry: &impl Entry) {
+    fn launch_entry(&self, entry: &Entry) {
         println!("Launching entry: {:?}", entry);
         let command = entry.launch_command();
 

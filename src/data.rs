@@ -1,5 +1,4 @@
 use std::{path::PathBuf};
-use gpui::SharedString;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 
@@ -33,10 +32,10 @@ pub fn get_desktop_entry_paths() -> Vec<PathBuf> {
     desktop_entries
 }
 
-pub fn get_desktop_entries() -> Vec<DesktopEntry> {
+pub fn get_desktop_entries() -> Vec<Entry> {
     let paths = get_desktop_entry_paths();
 
-    let entries: Vec<DesktopEntry> = paths.par_iter().filter_map(|path|{
+    let entries: Vec<Entry> = paths.par_iter().filter_map(|path|{
         match parse_desktop_entry(path) {
             Ok(entry) => {
                 let no_display = entry.entry.get("Desktop Entry", "NoDisplay")
@@ -53,7 +52,7 @@ pub fn get_desktop_entries() -> Vec<DesktopEntry> {
                     return None;
                 }
 
-                Some(entry)
+                Some(entry.into())
             },
             Err(_) => {
                 None
@@ -65,138 +64,69 @@ pub fn get_desktop_entries() -> Vec<DesktopEntry> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FixedIconSize {
-    pub width: u32,
-    pub height: u32,
-    pub scale: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum IconSize {
-    Scalable,
-    Fixed(FixedIconSize),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Icon {
-    pub theme: Option<String>,
-    pub path: PathBuf,
-    pub size: IconSize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopEntry {
     path: PathBuf,
     entry: freedesktop_entry_parser::Entry,
-    title: SharedString,
-    generic_name: Option<SharedString>,
-    description: Option<SharedString>,
 }
 
-impl Entry for DesktopEntry {
-    fn id(&self) -> &str {
-        self.path.to_str().unwrap_or_default()
-    }
-    fn title(&self) -> SharedString {
-        self.title.clone()
-    }
-    fn generic_name(&self) -> Option<SharedString> {
-        self.generic_name.clone()
-    }
+impl Into<Entry> for DesktopEntry {
+    fn into(self) -> Entry {
+        let title = {
+            self.entry.get("Desktop Entry", "Name")
+                .map(|e|e.first())
+                .flatten()
+                .map(|e|e.as_str())
+                .unwrap_or("Unnamed")
+        };
 
-    fn description(&self) -> Option<SharedString> {
-        match &self.description {
-            Some(desc) => return Some(desc.clone()),
-            None => {
-                match &self.generic_name {
-                    Some(gn) => return Some(gn.clone()),
-                    None => {
-                        if self.is_terminal() {
-                            return Some(SharedString::from("Terminal Application"));
-                        } else {
-                            return Some(SharedString::from("Application"));
-                        }
-                    },
-                }
-            }
-        }
-    }
+        let generic_name = {
+            self.entry.get("Desktop Entry", "GenericName")
+                .map(|e|e.first())
+                .flatten()
+                .map(|e|e.as_str())
+        };
 
-    fn is_terminal(&self) -> bool {
-        self.entry.get("Desktop Entry", "Terminal")
+        let description = {
+            self.entry.get("Desktop Entry", "Comment")
+                .map(|e|e.first())
+                .flatten()
+                .map(|e|e.as_str())
+        };
+
+        let is_terminal = self.entry.get("Desktop Entry", "Terminal")
             .map(|e| e.iter().filter(|t| t.as_str() == "true").collect::<Vec<_>>().len() > 0)
-            .unwrap_or(false)
-    }
+            .unwrap_or(false);
 
-    fn icon(&self) -> Option<&str> {
-        self.entry.get("Desktop Entry", "Icon")
-            .map(|e| e.first())
-            .flatten()
-            .map(|e| e.as_str())
-    }
+        let id = self.path.to_str().unwrap_or_default().to_string();
 
-    fn launch_command(&self) -> Option<&str> {
-        self.entry.get("Desktop Entry", "Exec")
-            .map(|e| e.first())
-            .flatten()
-            .map(|e| e.as_str())
-    }
-}
+        let icon = {
+            self.entry.get("Desktop Entry", "Icon")
+                .map(|e| e.first())
+                .flatten()
+                .map(|e| e.to_string())
+        };
 
-pub fn parse_icon_size(icon_size: impl AsRef<str>) -> Option<IconSize> {
-    let icon_size = icon_size.as_ref();
-    if icon_size == "scalable" {
-        return Some(IconSize::Scalable);
-    }
+        let launch_command = {
+            self.entry.get("Desktop Entry", "Exec")
+                .map(|e| e.first())
+                .flatten()
+                .map(|e| e.to_string())
+        };
 
-    let parts: Vec<&str> = icon_size.split('@').collect();
-    let size = parts.get(0).unwrap_or(&"").to_string();
-    let scale = parts.get(1).unwrap_or(&"").to_string();
-    let scale = if scale.is_empty() { 1 } else {
-        if let Ok(scale) = scale.parse::<u32>() {
-            scale
-        } else {
-            return None;
-        }
-    };
-    let parts = size.split('x').collect::<Vec<&str>>();
-    if parts.len() != 2 {
-        return None;
+        Entry::builder()
+            .id(&id)
+            .title(title)
+            .generic_name(generic_name)
+            .description(description)
+            .icon(icon)
+            .launch_command(launch_command)
+            .is_terminal(is_terminal)
+            .build()
     }
-
-    let (width, height) = (parts[0], parts[1]);
-    let (width, height) = (width.parse::<u32>(), height.parse::<u32>());
-    if let (Ok(width), Ok(height)) = (width, height) {
-        return Some(IconSize::Fixed(FixedIconSize { width, height, scale }));
-    }
-
-    None
 }
 
 pub fn parse_desktop_entry(path: &PathBuf) -> Result<DesktopEntry, anyhow::Error> {
     let entry = freedesktop_entry_parser::parse_entry(path)?;
 
-    let title = {
-        entry.get("Desktop Entry", "Name")
-            .map(|e|e.first())
-            .flatten()
-            .map(SharedString::from)
-            .unwrap_or(SharedString::new("Unnamed"))
-    };
-
-    let generic_name = {
-        entry.get("Desktop Entry", "GenericName")
-            .map(|e|e.first())
-            .flatten()
-            .map(SharedString::from)
-    };
-
-    let description = {
-        entry.get("Desktop Entry", "Comment")
-            .map(|e|e.first())
-            .flatten()
-            .map(SharedString::from)
-    };
-
-    Ok(DesktopEntry { entry, path: path.clone(), title, generic_name, description })
+    Ok(DesktopEntry { entry, path: path.clone() })
 }
