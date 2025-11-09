@@ -9,6 +9,7 @@ pub struct Entry {
     icon: Option<String>,
     launch_command: Option<String>,
     is_terminal: bool,
+    user_confirm: bool,
 }
 
 impl Default for Entry {
@@ -21,6 +22,7 @@ impl Default for Entry {
             icon: None,
             launch_command: None,
             is_terminal: false,
+            user_confirm: false,
         }
     }
 }
@@ -71,6 +73,11 @@ impl EntryBuilder {
         self
     }
 
+    pub fn user_confirm(mut self, must_confirm: bool) -> Self {
+        self.entry.user_confirm = must_confirm;
+        self
+    }
+
     pub fn build(self) -> Entry {
         self.entry
     }
@@ -97,6 +104,9 @@ impl Entry {
     }
     pub fn is_terminal(&self) -> bool {
         self.is_terminal
+    }
+    pub fn user_confirm(&self) -> bool {
+        self.user_confirm
     }
     pub fn builder() -> EntryBuilder {
         EntryBuilder::new()

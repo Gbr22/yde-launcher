@@ -10,6 +10,7 @@ pub fn get_builtin_actions() -> Vec<Entry> {
         .icon(Some("system-log-out"))
         .launch_command(Some("sh -c 'loginctl terminate-session $XDG_SESSION_ID'"))
         .is_terminal(false)
+        .user_confirm(true)
         .build());
 
     actions.push(Entry::builder()
@@ -19,6 +20,7 @@ pub fn get_builtin_actions() -> Vec<Entry> {
         .icon(Some("system-shutdown"))
         .launch_command(Some("shutdown now"))
         .is_terminal(false)
+        .user_confirm(true)
         .build());
 
     actions.push(Entry::builder()
@@ -28,6 +30,7 @@ pub fn get_builtin_actions() -> Vec<Entry> {
         .icon(Some("system-reboot"))
         .launch_command(Some("shutdown -r now"))
         .is_terminal(false)
+        .user_confirm(true)
         .build());
 
     actions

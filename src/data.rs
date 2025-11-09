@@ -121,6 +121,7 @@ impl Into<Entry> for DesktopEntry {
             .icon(icon)
             .launch_command(launch_command)
             .is_terminal(is_terminal)
+            .user_confirm(false)
             .build()
     }
 }

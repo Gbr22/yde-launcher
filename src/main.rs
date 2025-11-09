@@ -3,9 +3,11 @@ use std::path::{PathBuf};
 use std::rc::Rc;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::scroll::ScrollHandleOffsetable;
-use gpui_component::{Root, Theme, VirtualListScrollHandle, v_virtual_list};
+use gpui_component::{Kbd, Root, Theme, VirtualListScrollHandle, v_virtual_list};
 use gpui_component::input::{InputEvent, InputState, TextInput};
 use gpui_component::Selectable;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -29,6 +31,7 @@ pub struct State {
     scroll_handle: VirtualListScrollHandle,
     scroll_view_bounds: Option<Bounds<Pixels>>,
     icon_map: HashMap<String, PathBuf>,
+    confirming_entry: Option<Entry>,
 }
 
 impl Default for State {
@@ -42,6 +45,7 @@ impl Default for State {
             scroll_handle: VirtualListScrollHandle::new(),
             icon_map: HashMap::new(),
             scroll_view_bounds: None,
+            confirming_entry: None,
         }
     }
 }
@@ -142,7 +146,15 @@ impl State {
     fn get_selected_entry(&self) -> Option<&Entry> {
         self.filtered_entries.get(self.selection_index)
     }
-    fn launch_entry(&self, entry: &Entry) {
+    fn launch_entry(&mut self, entry: Entry) {
+        if entry.user_confirm() {
+            self.confirming_entry = Some(entry);
+        }
+        else {
+            self.execute_entry(entry);
+        }
+    }
+    fn execute_entry(&self, entry: Entry) {
         println!("Launching entry: {:?}", entry);
         let command = entry.launch_command();
 
@@ -222,7 +234,7 @@ impl Render for App {
                     TextInput::new(input)
                     .h_full()
                     .w_full()
-                    .selected(true)
+                    .selected(state.confirming_entry.is_none())
                     .appearance(false)
                 )
             )
@@ -339,6 +351,79 @@ impl Render for App {
                     )
                 )
             )
+            .when(state.confirming_entry.is_some(), |e|{
+                let entry = state.confirming_entry.clone().unwrap();
+
+                e.child(
+                    div()
+                    .absolute()
+                    .top(px(0.))
+                    .left(px(0.))
+                    .right(px(0.))
+                    .bottom(px(0.))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .p(px(8.))
+                        .rounded(px(4.))
+                        .bg(rgb(0x313244))
+                        .border_color(rgb(0x313244))
+                        .border_1()
+                        .shadow(vec![gpui::BoxShadow {
+                            color: Hsla {
+                                h: 0.,
+                                s: 0.,
+                                l: 0.,
+                                a: 0.4,
+                            },
+                            blur_radius: px(8.),
+                            spread_radius: px(0.),
+                            offset: point(px(0.), px(0.)),
+                        }])
+                        .child(format!("{}", entry.title()))
+                        .child(
+                            div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .child(
+                                Button::new("confirm")
+                                .primary()
+                                .label("Run")
+                                .w_full()
+                                .child(Kbd::new(Keystroke::parse("ctrl-enter").unwrap()))
+                                .on_click(|_event, _window, cx| {
+                                    let state = cx.global::<State>();
+                                    let entry = state.confirming_entry.clone();
+                                    if let Some(entry) = entry {
+                                        state.execute_entry(entry);
+                                    }
+                                })
+                            )
+                            .child(
+                                Button::new("cancel")
+                                .primary()
+                                .label("Cancel")
+                                .w_full()
+                                .child(Kbd::new(Keystroke::parse("escape").unwrap()))
+                                .on_click(|_event, window, _cx| {
+                                    State::update_global(_cx, |state, _cx| {
+                                        state.confirming_entry = None;
+                                        state.input_focus_handle.clone().map(|h| h.focus(window));
+                                    });
+                                })
+                            )
+                        )
+                    )
+                )
+            })
     }
 }
 
@@ -364,11 +449,11 @@ impl App {
                     });
                 }
                 InputEvent::PressEnter { secondary: _ } => {
-                    let state = cx.global::<State>();
-                    if let Some(entry) = state.get_selected_entry() {
-                        state.launch_entry(entry);
-                    }
-                    cx.quit();
+                    cx.update_global(|state: &mut State, cx| {
+                        if let Some(entry) = state.get_selected_entry().cloned() {
+                            state.launch_entry(entry);
+                        }
+                    });
                 }
                 _ => {}
             };
@@ -400,26 +485,50 @@ fn main() {
         cx.observe_keystrokes(|event, _window, cx| {
             if event.keystroke.key == "up" {
                 State::update_global(cx, |state, _cx| {
+                    if state.confirming_entry.is_some() { return; }
                     state.add_selection_index(-1);
                 });
             }
             if event.keystroke.key == "down" {
                 State::update_global(cx, |state, _cx| {
+                    if state.confirming_entry.is_some() { return; }
                     state.add_selection_index(1);
                 });
             }
             if event.keystroke.key == "pageup" {
                 State::update_global(cx, |state, _cx| {
+                    if state.confirming_entry.is_some() { return; }
                     state.set_selection_index(0);
                 });
             }
             if event.keystroke.key == "pagedown" {
                 State::update_global(cx, |state, _cx| {
+                    if state.confirming_entry.is_some() { return; }
                     state.set_selection_index(state.filtered_entries.len().saturating_sub(1));
                 });
             }
             if event.keystroke.key == "escape" {
+                let state = cx.global::<State>();
+                if state.confirming_entry.is_some() {
+                    State::update_global(cx, |state, _cx| {
+                        state.confirming_entry = None;
+                        state.input_focus_handle.clone().map(|h| h.focus(_window));
+                    });
+                    return;
+                }
                 cx.quit();
+            }
+            if event.keystroke.key == "enter" {
+                if event.keystroke.modifiers.control {
+                    let state = cx.global::<State>();
+                    let entry = state.confirming_entry.clone();
+                    if let Some(entry) = entry {
+                        State::update_global(cx, |state, _cx| {
+                            state.execute_entry(entry);
+                        });
+                        return;
+                    }
+                }
             }
         }).detach();
 
