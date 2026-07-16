@@ -49,22 +49,22 @@ impl EntryBuilder {
     }
 
     pub fn generic_name(mut self, generic_name: Option<impl Into<String>>) -> Self {
-        self.entry.generic_name = generic_name.map(|e|SharedString::from(e.into()));
+        self.entry.generic_name = generic_name.map(|e| SharedString::from(e.into()));
         self
     }
 
     pub fn description(mut self, description: Option<impl Into<String>>) -> Self {
-        self.entry.description = description.map(|e|SharedString::from(e.into()));
+        self.entry.description = description.map(|e| SharedString::from(e.into()));
         self
     }
 
     pub fn icon(mut self, icon: Option<impl Into<String>>) -> Self {
-        self.entry.icon = icon.map(|e|e.into());
+        self.entry.icon = icon.map(|e| e.into());
         self
     }
 
     pub fn launch_command(mut self, launch_command: Option<impl Into<String>>) -> Self {
-        self.entry.launch_command = launch_command.map(|e|e.into());
+        self.entry.launch_command = launch_command.map(|e| e.into());
         self
     }
 
