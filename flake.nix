@@ -19,6 +19,7 @@
           rust-bin.stable.latest.default
           libxcb
           libxkbcommon
+          libGL
           vulkan-loader
           wayland
         ];

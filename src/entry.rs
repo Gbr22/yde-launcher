@@ -1,11 +1,11 @@
-use gpui::SharedString;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct Entry {
     id: String,
-    title: SharedString,
-    generic_name: Option<SharedString>,
-    description: Option<SharedString>,
+    title: String,
+    generic_name: Option<String>,
+    description: Option<String>,
     icon: Option<String>,
     launch_command: Option<String>,
     is_terminal: bool,
@@ -16,7 +16,7 @@ impl Default for Entry {
     fn default() -> Self {
         Entry {
             id: String::new(),
-            title: SharedString::new("Unnamed"),
+            title: "Unnamed".into(),
             generic_name: None,
             description: None,
             icon: None,
@@ -44,17 +44,17 @@ impl EntryBuilder {
     }
 
     pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.entry.title = SharedString::from(title.into());
+        self.entry.title = title.into();
         self
     }
 
     pub fn generic_name(mut self, generic_name: Option<impl Into<String>>) -> Self {
-        self.entry.generic_name = generic_name.map(|e| SharedString::from(e.into()));
+        self.entry.generic_name = generic_name.map(|e| e.into());
         self
     }
 
     pub fn description(mut self, description: Option<impl Into<String>>) -> Self {
-        self.entry.description = description.map(|e| SharedString::from(e.into()));
+        self.entry.description = description.map(|e| e.into());
         self
     }
 
@@ -87,14 +87,14 @@ impl Entry {
     pub fn id(&self) -> &str {
         &self.id
     }
-    pub fn title(&self) -> SharedString {
-        self.title.clone()
+    pub fn title(&self) -> &str {
+        &self.title
     }
-    pub fn generic_name(&self) -> Option<SharedString> {
-        self.generic_name.clone()
+    pub fn generic_name(&self) -> Option<&str> {
+        self.generic_name.as_deref()
     }
-    pub fn description(&self) -> Option<SharedString> {
-        self.description.clone()
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
     }
     pub fn icon(&self) -> Option<&str> {
         self.icon.as_deref()
