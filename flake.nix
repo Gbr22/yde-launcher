@@ -10,10 +10,25 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
+        appName = "YDE Launcher";
+        appId = "sh.kess.yde.launcher";
+        exeName = "yde-launcher";
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
           inherit system overlays;
         };
+
+        desktopItem = pkgs.makeDesktopItem {
+          name = appId;
+          desktopName = appName;
+          exec = exeName;
+          icon = "app-launcher";
+          categories = [ "Utility" ];
+          startupWMClass = appId;
+          terminal = false;
+          noDisplay = true;
+        };
+
         buildInputs = with pkgs; [
           pkg-config
           rust-bin.stable.latest.default
@@ -25,9 +40,10 @@
         ];
         nativeBuildInputs = with pkgs; [
           pkg-config
+          copyDesktopItems
         ];
         libPath = pkgs.lib.makeLibraryPath (buildInputs ++ nativeBuildInputs);
-        runScript = pkgs.writeShellScriptBin "yde-launcher" ''
+        runScript = pkgs.writeShellScriptBin exeName ''
           #!/usr/bin/env bash
           nix develop --command cargo run
         '';
@@ -39,7 +55,7 @@
           '';
         };
         releaseBuild = pkgs.rustPlatform.buildRustPackage {
-          name = "yde-launcher";
+          name = exeName;
           src = ./.;
 
           cargoLock = {
@@ -52,13 +68,15 @@
           LD_LIBRARY_PATH = libPath;
 
           postFixup = ''
-            patchelf --set-rpath ${libPath} $out/bin/yde-launcher
+            patchelf --set-rpath ${libPath} $out/bin/${exeName}
           '';
 
           meta = {
-            description = "YDE Launcher";
+            description = appName;
             maintainers = [];
           };
+
+          desktopItems = [ desktopItem ];
         };
       in
       {
@@ -66,7 +84,7 @@
         devShells.default = shell;
         apps.default = {
           type = "app";
-          program = "${runScript}/bin/yde-launcher";
+          program = "${runScript}/bin/${exeName}";
         };
       }
     );

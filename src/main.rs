@@ -405,6 +405,7 @@ impl eframe::App for App {
 }
 
 const APP_NAME: &str = "YDE Launcher";
+const APP_ID: &str = "sh.kess.yde.launcher";
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
@@ -414,7 +415,8 @@ fn main() -> eframe::Result<()> {
             .with_decorations(false)
             .with_transparent(true)
             .with_always_on_top()
-            .with_title(APP_NAME),
+            .with_title(APP_NAME)
+            .with_app_id(APP_ID),
         ..Default::default()
     };
 
