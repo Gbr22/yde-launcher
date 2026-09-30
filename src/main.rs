@@ -321,7 +321,7 @@ impl eframe::App for App {
                                                         .icon()
                                                         .and_then(|icon| self.icon_map.get(icon));
 
-                                                    ui.add_space(8.0);
+                                                    ui.add_space(ui.spacing().item_spacing.x);
                                                     let image_size = 40.0;
 
                                                     if let Some(icon_path) = icon_path {
@@ -333,10 +333,8 @@ impl eframe::App for App {
                                                                 )),
                                                         );
                                                     } else {
-                                                        ui.add_space(image_size);
+                                                        ui.allocate_space(egui::vec2(image_size, image_size));
                                                     }
-
-                                                    ui.add_space(4.0);
 
                                                     ui.vertical(|ui| {
                                                         ui.add_space(4.0);
