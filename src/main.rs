@@ -1,3 +1,4 @@
+use freedesktop_icon::IconTheme;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -49,7 +50,8 @@ impl Default for App {
 
 impl App {
     fn find_icons(&mut self) {
-        let theme_name = linicon_theme::get_icon_theme();
+        let icon_theme = IconTheme::current();
+        let theme_name = icon_theme.name();
         let entries = &self.entries;
         self.icon_map.clear();
         let iter: Vec<(String, PathBuf)> = entries
@@ -62,19 +64,16 @@ impl App {
                         return Some((icon.to_string(), path_buf));
                     }
 
-                    if let Some(theme_name) = &theme_name {
-                        let icon_path = freedesktop_icons::lookup(icon)
-                            .with_theme(&theme_name)
-                            .force_svg()
-                            .with_size(64)
-                            .find();
-                        if let Some(icon_path) = icon_path {
-                            return Some((icon.to_string(), icon_path));
-                        }
+                    let icon_path = freedesktop_icons::lookup(icon)
+                        .with_theme(theme_name)
+                        .force_svg()
+                        .with_size(64)
+                        .find();
+                    if let Some(icon_path) = icon_path {
+                        return Some((icon.to_string(), icon_path));
                     }
 
                     let icon_path = freedesktop_icons::lookup(icon)
-                        .with_theme("hicolor")
                         .force_svg()
                         .with_size(64)
                         .find();
