@@ -18,13 +18,14 @@ pub fn get_desktop_entry_paths() -> Vec<PathBuf> {
         .map(|dir| {
             let apps_dir = dir.join("applications");
             let mut desktop_entries = Vec::new();
-            if apps_dir.exists() && apps_dir.is_dir() {
-                if let Ok(entries) = std::fs::read_dir(apps_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
-                            desktop_entries.push(path);
-                        }
+            if apps_dir.exists()
+                && apps_dir.is_dir()
+                && let Ok(entries) = std::fs::read_dir(apps_dir)
+            {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
+                        desktop_entries.push(path);
                     }
                 }
             }
@@ -47,11 +48,10 @@ pub fn get_desktop_entries() -> Vec<Entry> {
                     .entry
                     .get("Desktop Entry", "NoDisplay")
                     .map(|e| {
-                        e.iter()
+                        !e.iter()
                             .filter(|t| t.as_str() == "true")
                             .collect::<Vec<_>>()
-                            .len()
-                            > 0
+                            .is_empty()
                     })
                     .unwrap_or(false);
 
@@ -63,11 +63,10 @@ pub fn get_desktop_entries() -> Vec<Entry> {
                     .entry
                     .get("Desktop Entry", "Hidden")
                     .map(|e| {
-                        e.iter()
+                        !e.iter()
                             .filter(|t| t.as_str() == "true")
                             .collect::<Vec<_>>()
-                            .len()
-                            > 0
+                            .is_empty()
                     })
                     .unwrap_or(false);
 
@@ -90,60 +89,54 @@ pub struct DesktopEntry {
     entry: freedesktop_entry_parser::Entry,
 }
 
-impl Into<Entry> for DesktopEntry {
-    fn into(self) -> Entry {
+impl From<DesktopEntry> for Entry {
+    fn from(val: DesktopEntry) -> Self {
         let title = {
-            self.entry
+            val.entry
                 .get("Desktop Entry", "Name")
-                .map(|e| e.first())
-                .flatten()
+                .and_then(|e| e.first())
                 .map(|e| e.as_str())
                 .unwrap_or("Unnamed")
         };
 
         let generic_name = {
-            self.entry
+            val.entry
                 .get("Desktop Entry", "GenericName")
-                .map(|e| e.first())
-                .flatten()
+                .and_then(|e| e.first())
                 .map(|e| e.as_str())
         };
 
         let description = {
-            self.entry
+            val.entry
                 .get("Desktop Entry", "Comment")
-                .map(|e| e.first())
-                .flatten()
+                .and_then(|e| e.first())
                 .map(|e| e.as_str())
         };
 
-        let is_terminal = self
+        let is_terminal = val
             .entry
             .get("Desktop Entry", "Terminal")
             .map(|e| {
-                e.iter()
+                !e.iter()
                     .filter(|t| t.as_str() == "true")
                     .collect::<Vec<_>>()
-                    .len()
-                    > 0
+                    .is_empty()
             })
             .unwrap_or(false);
 
-        let id = self.path.to_str().unwrap_or_default().to_string();
+        let id = val.path.to_str().unwrap_or_default().to_string();
 
         let icon = {
-            self.entry
+            val.entry
                 .get("Desktop Entry", "Icon")
-                .map(|e| e.first())
-                .flatten()
+                .and_then(|e| e.first())
                 .map(|e| e.to_string())
         };
 
         let launch_command = {
-            self.entry
+            val.entry
                 .get("Desktop Entry", "Exec")
-                .map(|e| e.first())
-                .flatten()
+                .and_then(|e| e.first())
                 .map(|e| e.to_string())
         };
 

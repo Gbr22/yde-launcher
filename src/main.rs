@@ -5,7 +5,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use eframe::{egui, wgpu::Color};
+use eframe::egui;
 use egui::{Color32, CornerRadius, FontId, Margin, RichText, ScrollArea, Sense, Stroke, TextEdit};
 
 mod actions;
@@ -81,7 +81,7 @@ impl App {
                         return Some((icon.to_string(), icon_path));
                     }
                 }
-                return None;
+                None
             })
             .flatten()
             .collect();
@@ -141,7 +141,7 @@ impl App {
     }
     fn add_selection_index(&mut self, delta: isize) {
         if delta < 0 {
-            self.set_selection_index(self.selection_index.saturating_sub(delta.abs() as usize));
+            self.set_selection_index(self.selection_index.saturating_sub(delta.unsigned_abs()));
         } else {
             self.set_selection_index(self.selection_index.saturating_add(delta as usize));
         }
@@ -162,7 +162,7 @@ impl App {
         let command = entry.launch_command();
 
         if let Some(command) = command {
-            let Ok(args) = shell_words::split(&command) else {
+            let Ok(args) = shell_words::split(command) else {
                 return;
             };
             let args: Vec<String> = args
@@ -238,14 +238,14 @@ impl eframe::App for App {
         if ui.input(|i| i.key_pressed(egui::Key::PageDown)) {
             self.set_selection_index(self.filtered_entries.len().saturating_sub(1));
         }
-        let is_ctrl_pressed = ui.input(|i|i.modifiers.ctrl);
-        if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            if let Some(entry) = self.get_selected_entry().cloned() {
-                if is_ctrl_pressed {
-                    self.execute_entry(entry);
-                } else {
-                    self.launch_entry(entry);
-                }
+        let is_ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
+        if ui.input(|i| i.key_pressed(egui::Key::Enter))
+            && let Some(entry) = self.get_selected_entry().cloned()
+        {
+            if is_ctrl_pressed {
+                self.execute_entry(entry);
+            } else {
+                self.launch_entry(entry);
             }
         }
 
@@ -299,12 +299,13 @@ impl eframe::App for App {
                                 .map(|index| {
                                     let item = &self.filtered_entries[index];
                                     let is_selected = self.selection_index == index;
-                                    let fill_color = match (is_selected, item.user_confirm(), is_ctrl_pressed) {
-                                        (true, false, _) => rgb!("#313244").with_alpha(0.8),
-                                        (true, true, false) => rgb!("#df8e1d").with_alpha(0.4),
-                                        (true, true, true) => rgb!("#d20f39").with_alpha(0.8),
-                                        _ => Color32::TRANSPARENT,
-                                    };
+                                    let fill_color =
+                                        match (is_selected, item.user_confirm(), is_ctrl_pressed) {
+                                            (true, false, _) => rgb!("#313244").with_alpha(0.8),
+                                            (true, true, false) => rgb!("#df8e1d").with_alpha(0.4),
+                                            (true, true, true) => rgb!("#d20f39").with_alpha(0.8),
+                                            _ => Color32::TRANSPARENT,
+                                        };
                                     let item_frame = egui::Frame::new()
                                         .fill(fill_color)
                                         .corner_radius(CornerRadius::same(4));
@@ -332,7 +333,9 @@ impl eframe::App for App {
                                                                 )),
                                                         );
                                                     } else {
-                                                        ui.allocate_space(egui::vec2(image_size, image_size));
+                                                        ui.allocate_space(egui::vec2(
+                                                            image_size, image_size,
+                                                        ));
                                                     }
 
                                                     ui.vertical(|ui| {
